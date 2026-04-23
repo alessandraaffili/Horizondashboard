@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Horizon AI Profile — Insights Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --pink: #F2007D;
+    --sunset: #441F72;
+    --aqua: #2ABEB9;
+    --sunrays: #FFB511;
+    --dark-lava: #1E0023;
+    --white: #FFFFFF;
+    --pink-light: rgba(242,0,125,0.10);
+    --sunset-light: rgba(68,31,114,0.10);
+    --aqua-light: rgba(42,190,185,0.12);
+    --sunrays-light: rgba(255,181,17,0.12);
+    --surface: #F7F4F8;
+    --border: rgba(30,0,35,0.10);
+    --text-primary: #1E0023;
+    --text-secondary: rgba(30,0,35,0.60);
+    --text-tertiary: rgba(30,0,35,0.38);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Ubuntu', sans-serif; background: var(--surface); color: var(--text-primary); font-size: 14px; line-height: 1.5; }
+
+  /* Header */
+  .header { background: var(--dark-lava); color: var(--white); padding: 28px 40px 24px; display: flex; align-items: flex-end; justify-content: space-between; }
+  .header-title { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+  .header-title span { color: var(--pink); }
+  .header-sub { font-size: 13px; color: rgba(255,255,255,0.50); margin-top: 4px; font-weight: 300; }
+  .header-meta { text-align: right; font-size: 12px; color: rgba(255,255,255,0.40); font-weight: 300; }
+  .header-meta strong { color: rgba(255,255,255,0.80); font-weight: 500; display: block; font-size: 20px; }
+
+  /* Nav tabs */
+  .nav { background: var(--white); border-bottom: 1px solid var(--border); padding: 0 40px; display: flex; gap: 0; position: sticky; top: 0; z-index: 100; }
+  .nav-tab { padding: 14px 20px; font-size: 13px; font-weight: 500; color: var(--text-tertiary); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; }
+  .nav-tab:hover { color: var(--text-secondary); }
+  .nav-tab.active { color: var(--pink); border-bottom-color: var(--pink); }
+
+  /* Layout */
+  .page { display: none; padding: 32px 40px 48px; max-width: 1200px; }
+  .page.active { display: block; }
+  .section-label { font-size: 10px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; color: var(--text-tertiary); margin: 0 0 14px; }
+  h2 { font-size: 17px; font-weight: 500; color: var(--text-primary); margin: 0 0 6px; }
+  h3 { font-size: 13px; font-weight: 500; color: var(--text-primary); margin: 0 0 12px; }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
+
+  /* Cards */
+  .card { background: var(--white); border-radius: 12px; border: 1px solid var(--border); padding: 20px 24px; }
+  .card + .card { margin-top: 12px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+
+  /* Metric cards */
+  .metric { background: var(--white); border-radius: 10px; border: 1px solid var(--border); padding: 16px 20px; }
+  .metric-label { font-size: 11px; color: var(--text-tertiary); margin: 0 0 6px; font-weight: 400; }
+  .metric-value { font-size: 28px; font-weight: 700; color: var(--text-primary); line-height: 1; margin: 0 0 4px; }
+  .metric-value.pink { color: var(--pink); }
+  .metric-value.aqua { color: var(--aqua); }
+  .metric-value.sunset { color: var(--sunset); }
+  .metric-sub { font-size: 11px; color: var(--text-tertiary); }
+
+  /* OKR bars */
+  .okr-row { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+  .okr-row:last-child { margin-bottom: 0; }
+  .okr-name { font-size: 13px; color: var(--text-secondary); min-width: 100px; font-weight: 400; }
+  .okr-track-wrap { flex: 1; position: relative; }
+  .okr-track { height: 12px; background: var(--surface); border-radius: 6px; position: relative; overflow: visible; }
+  .okr-baseline { position: absolute; top: 0; height: 100%; background: rgba(242,0,125,0.18); border-radius: 6px 0 0 6px; }
+  .okr-fill { position: absolute; top: 0; height: 100%; border-radius: 6px; transition: width 1s ease; }
+  .okr-target-tick { position: absolute; top: -5px; bottom: -5px; width: 2px; border-radius: 1px; background: var(--text-tertiary); }
+  .okr-target-tick::after { content: attr(data-label); position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 10px; color: var(--text-tertiary); white-space: nowrap; font-family: 'Ubuntu', sans-serif; }
+  .okr-stats { display: flex; align-items: center; gap: 8px; min-width: 140px; justify-content: flex-end; }
+  .okr-pct { font-size: 16px; font-weight: 700; }
+  .okr-arrow { font-size: 11px; color: var(--text-tertiary); }
+  .okr-target-pct { font-size: 12px; color: var(--text-tertiary); }
+  .pill { display: inline-block; font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 20px; }
+  .pill-green { background: rgba(42,190,185,0.15); color: #177874; }
+  .pill-amber { background: var(--sunrays-light); color: #8a6000; }
+  .pill-red { background: rgba(242,0,125,0.10); color: #b8005f; }
+  .pill-gray { background: var(--surface); color: var(--text-tertiary); }
+
+  /* Barrier bars */
+  .barrier-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .barrier-label { font-size: 12px; color: var(--text-secondary); flex: 1; min-width: 0; }
+  .barrier-track { width: 130px; height: 8px; background: var(--surface); border-radius: 4px; flex-shrink: 0; overflow: hidden; }
+  .barrier-fill { height: 8px; border-radius: 4px; }
+  .barrier-pct { font-size: 12px; font-weight: 500; min-width: 36px; text-align: right; }
+
+  /* Profile stacked bars */
+  .stacked-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .stacked-label { font-size: 12px; color: var(--text-secondary); min-width: 150px; }
+  .stacked-bar { flex: 1; height: 20px; display: flex; border-radius: 4px; overflow: hidden; }
+  .stacked-seg { height: 100%; transition: width 0.5s; }
+  .stacked-total { font-size: 11px; color: var(--text-tertiary); min-width: 30px; text-align: right; }
+
+  /* Legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 16px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  /* Table */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .data-table th { font-weight: 500; color: var(--text-tertiary); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  .data-table th:first-child { text-align: left; }
+  .data-table td { padding: 9px 10px; text-align: right; color: var(--text-secondary); border-bottom: 1px solid var(--border); }
+  .data-table td:first-child { text-align: left; color: var(--text-primary); font-weight: 400; }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr.highlight td { font-weight: 500; }
+
+  /* Callout */
+  .callout { border-left: 3px solid var(--pink); padding: 12px 16px; background: var(--pink-light); border-radius: 0 8px 8px 0; margin-bottom: 12px; }
+  .callout.aqua { border-left-color: var(--aqua); background: var(--aqua-light); }
+  .callout.sunset { border-left-color: var(--sunset); background: var(--sunset-light); }
+  .callout.sunrays { border-left-color: var(--sunrays); background: var(--sunrays-light); }
+  .callout-title { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--pink); margin: 0 0 4px; }
+  .callout.aqua .callout-title { color: #177874; }
+  .callout.sunset .callout-title { color: var(--sunset); }
+  .callout.sunrays .callout-title { color: #8a6000; }
+  .callout p { font-size: 13px; color: var(--text-primary); margin: 0; line-height: 1.5; }
+
+  /* Profile colours */
+  .c-observer { background: #D3D1C7; }
+  .c-seeker { background: #2ABEB9; }
+  .c-navigator { background: #FFB511; }
+  .c-adventurer { background: #F2007D; }
+  .c-pathfinder { background: #441F72; }
+
+  /* Chart containers */
+  .chart-wrap { position: relative; }
+
+  /* Insight chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { font-size: 12px; padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); color: var(--text-secondary); background: var(--white); }
+  .chip.pink { border-color: rgba(242,0,125,0.3); color: #b8005f; background: var(--pink-light); }
+  .chip.aqua { border-color: rgba(42,190,185,0.3); color: #177874; background: var(--aqua-light); }
+  .chip.amber { border-color: rgba(255,181,17,0.4); color: #8a6000; background: var(--sunrays-light); }
+  .chip.sunset { border-color: rgba(68,31,114,0.3); color: var(--sunset); background: var(--sunset-light); }
+
+  /* Footer */
+  .footer { background: var(--dark-lava); color: rgba(255,255,255,0.35); font-size: 11px; padding: 16px 40px; text-align: right; font-weight: 300; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">Horizon <span>AI Literacy</span> Dashboard</div>
+    <div class="header-sub">Profile Finder — Insights & OKR Tracker</div>
+  </div>
+  <div class="header-meta">
+    <strong>688</strong>
+    latest responses · April 2026
+  </div>
+</div>
+
+<nav class="nav">
+  <div class="nav-tab active" onclick="showPage('okr')">OKR Progress</div>
+  <div class="nav-tab" onclick="showPage('profiles')">Profile Distribution</div>
+  <div class="nav-tab" onclick="showPage('barriers')">Barrier Analysis</div>
+  <div class="nav-tab" onclick="showPage('departments')">Departments</div>
+  <div class="nav-tab" onclick="showPage('people')">People Lens</div>
+</nav>
+
+<!-- PAGE 1: OKR -->
+<div class="page active" id="page-okr">
+  <p class="section-label">Key results — measured against respondents</p>
+
+  <div class="grid-4" style="margin-bottom:24px;">
+    <div class="metric"><p class="metric-label">Overall Adv+Path</p><p class="metric-value pink">10.6%</p><p class="metric-sub">73 of 688 respondents</p></div>
+    <div class="metric"><p class="metric-label">Technology Adv+Path</p><p class="metric-value" style="color:var(--aqua);">17.8%</p><p class="metric-sub">36 of 202 respondents</p></div>
+    <div class="metric"><p class="metric-label">Data Adv+Path</p><p class="metric-value" style="color:var(--sunrays);">12.3%</p><p class="metric-sub">7 of 57 respondents</p></div>
+    <div class="metric"><p class="metric-label">Navigator pipeline</p><p class="metric-value" style="color:var(--sunset);">130</p><p class="metric-sub">one step from Adventurer</p></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <h3>Progress toward targets</h3>
+    <p style="font-size:11px;color:var(--text-tertiary);margin:-6px 0 20px;">Tick mark = target. Left shading = baseline starting point.</p>
+
+    <div class="okr-row">
+      <span class="okr-name">Overall</span>
+      <div class="okr-track-wrap">
+        <div class="okr-track">
+          <div class="okr-baseline" style="width:66.6%;"></div>
+          <div class="okr-fill" style="width:88.3%;background:var(--pink);"></div>
+          <div class="okr-target-tick" style="left:100%;" data-label="12%"></div>
+        </div>
+      </div>
+      <div class="okr-stats">
+        <span class="okr-pct" style="color:var(--pink);">10.6%</span>
+        <span class="okr-arrow">→</span>
+        <span class="okr-target-pct">target 12%</span>
+        <span class="pill pill-amber">need 10 more</span>
+      </div>
+    </div>
+
+    <div class="okr-row">
+      <span class="okr-name">Technology</span>
+      <div class="okr-track-wrap">
+        <div class="okr-track">
+          <div class="okr-baseline" style="width:63.6%;"></div>
+          <div class="okr-fill" style="width:80.9%;background:var(--aqua);"></div>
+          <div class="okr-target-tick" style="left:100%;" data-label="22%"></div>
+        </div>
+      </div>
+      <div class="okr-stats">
+        <span class="okr-pct" style="color:var(--aqua);">17.8%</span>
+        <span class="okr-arrow">→</span>
+        <span class="okr-target-pct">target 22%</span>
+        <span class="pill pill-amber">need 8 more</span>
+      </div>
+    </div>
+
+    <div class="okr-row">
+      <span class="okr-name">Data</span>
+      <div class="okr-track-wrap">
+        <div class="okr-track">
+          <div class="okr-baseline" style="width:20%;"></div>
+          <div class="okr-fill" style="width:35.1%;background:var(--sunrays);"></div>
+          <div class="okr-target-tick" style="left:100%;" data-label="35%"></div>
+        </div>
+      </div>
+      <div class="okr-stats">
+        <span class="okr-pct" style="color:#8a6000;">12.3%</span>
+        <span class="okr-arrow">→</span>
+        <span class="okr-target-pct">target 35%</span>
+        <span class="pill pill-red">need 13 more</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:16px;">
+    <div class="callout">
+      <p class="callout-title">Overall OKR — on track</p>
+      <p>You are 2.6 percentage points from the 12% target. With 130 Navigators in the pipeline, you have more than enough people to reach this if the right interventions are in place.</p>
+    </div>
+    <div class="callout sunrays">
+      <p class="callout-title">Data OKR — hardest gap</p>
+      <p>Data needs to nearly triple its Adv+Path share. 18 Navigators exist in the department — converting just 13 of them would hit the target. Data Analytics sub-team is the priority.</p>
+    </div>
+  </div>
+
+  <div class="callout aqua">
+    <p class="callout-title">The moving denominator — note for reporting</p>
+    <p>OKRs are measured against respondents. This means every new person who takes the survey shifts the denominator. A wave of Observer-level respondents will dilute your percentage even without any regression. Track absolute numbers alongside percentages when reporting progress.</p>
+  </div>
+</div>
+
+<!-- PAGE 2: PROFILE DISTRIBUTION -->
+<div class="page" id="page-profiles">
+  <p class="section-label">How the organisation is distributed across the five profiles</p>
+
+  <div class="grid-2" style="margin-bottom:16px;">
+    <div class="card">
+      <h3>Overall distribution — 688 respondents</h3>
+      <div class="legend" style="margin-bottom:20px;">
+        <div class="legend-item"><div class="legend-dot c-observer"></div>Observer</div>
+        <div class="legend-item"><div class="legend-dot c-seeker"></div>Seeker</div>
+        <div class="legend-item"><div class="legend-dot c-navigator"></div>Navigator</div>
+        <div class="legend-item"><div class="legend-dot c-adventurer"></div>Adventurer</div>
+        <div class="legend-item"><div class="legend-dot c-pathfinder"></div>Pathfinder</div>
+      </div>
+      <div class="chart-wrap" style="height:220px;">
+        <canvas id="donutChart" role="img" aria-label="Donut chart showing profile distribution: Observer 271, Seeker 214, Navigator 130, Adventurer 48, Pathfinder 25">Profile distribution data</canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Profile breakdown</h3>
+      <div style="margin-top:8px;">
+        <div class="barrier-row"><span class="barrier-label">Observer</span><div class="barrier-track" style="width:180px;"><div class="barrier-fill" style="width:39.4%;background:#D3D1C7;"></div></div><span class="barrier-pct">271 <span style="color:var(--text-tertiary);font-weight:400;">39%</span></span></div>
+        <div class="barrier-row"><span class="barrier-label">Seeker</span><div class="barrier-track" style="width:180px;"><div class="barrier-fill" style="width:31.1%;background:#2ABEB9;"></div></div><span class="barrier-pct">214 <span style="color:var(--text-tertiary);font-weight:400;">31%</span></span></div>
+        <div class="barrier-row"><span class="barrier-label">Navigator</span><div class="barrier-track" style="width:180px;"><div class="barrier-fill" style="width:18.9%;background:#FFB511;"></div></div><span class="barrier-pct">130 <span style="color:var(--text-tertiary);font-weight:400;">19%</span></span></div>
+        <div class="barrier-row"><span class="barrier-label">Adventurer</span><div class="barrier-track" style="width:180px;"><div class="barrier-fill" style="width:7.0%;background:#F2007D;"></div></div><span class="barrier-pct">48 <span style="color:var(--text-tertiary);font-weight:400;">7%</span></span></div>
+        <div class="barrier-row"><span class="barrier-label">Pathfinder</span><div class="barrier-track" style="width:180px;"><div class="barrier-fill" style="width:3.6%;background:#441F72;"></div></div><span class="barrier-pct">25 <span style="color:var(--text-tertiary);font-weight:400;">4%</span></span></div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+      <div class="chips">
+        <span class="chip pink">73 at Adv+Path = 10.6%</span>
+        <span class="chip aqua">130 Navigators in pipeline</span>
+        <span class="chip amber">485 below Navigator (70%)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Profile distribution by department</h3>
+    <div class="legend" style="margin-bottom:16px;">
+      <div class="legend-item"><div class="legend-dot c-observer"></div>Observer</div>
+      <div class="legend-item"><div class="legend-dot c-seeker"></div>Seeker</div>
+      <div class="legend-item"><div class="legend-dot c-navigator"></div>Navigator</div>
+      <div class="legend-item"><div class="legend-dot c-adventurer"></div>Adventurer</div>
+      <div class="legend-item"><div class="legend-dot c-pathfinder"></div>Pathfinder</div>
+    </div>
+    <div id="stacked-bars"></div>
+  </div>
+</div>
+
+<!-- PAGE 3: BARRIER ANALYSIS -->
+<div class="page" id="page-barriers">
+  <p class="section-label">Where people get stuck — question-level analysis</p>
+
+  <div class="callout aqua" style="margin-bottom:20px;">
+    <p class="callout-title">How to read this</p>
+    <p>Each bar shows the % of people at that profile level who already answer Yes to the <em>next level's</em> questions. High % = nearly there. Low % = the real barrier to progression.</p>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Navigators → Adventurer</h3>
+      <p style="font-size:11px;color:var(--text-tertiary);margin:-6px 0 16px;">130 Navigators. % already answering Yes to Adventurer questions.</p>
+      <div class="barrier-row"><span class="barrier-label">Identifies measurable AI value</span><div class="barrier-track"><div class="barrier-fill" style="width:93.1%;background:#2ABEB9;"></div></div><span class="barrier-pct" style="color:#177874;">93%</span></div>
+      <div class="barrier-row"><span class="barrier-label">Explains AI support for team goals</span><div class="barrier-track"><div class="barrier-fill" style="width:82.3%;background:#2ABEB9;"></div></div><span class="barrier-pct" style="color:#177874;">82%</span></div>
+      <div class="barrier-row"><span class="barrier-label">Promotes responsible AI use</span><div class="barrier-track"><div class="barrier-fill" style="width:53.8%;background:#FFB511;"></div></div><span class="barrier-pct" style="color:#8a6000;">54%</span></div>
+      <div class="barrier-row"><span class="barrier-label">Helps colleagues adopt AI tools</span><div class="barrier-track"><div class="barrier-fill" style="width:37.7%;background:#F2007D;"></div></div><span class="barrier-pct" style="color:#b8005f;">38%</span></div>
+      <div class="barrier-row"><span class="barrier-label">Supports knowledge beyond own team</span><div class="barrier-track"><div class="barrier-fill" style="width:20%;background:#F2007D;"></div></div><span class="barrier-pct" style="color:#b8005f;">20%</span></div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0 12px;">
+      <div class="callout" style="margin:0;">
+        <p class="callout-title">Key insight</p>
+        <p>Navigators understand the value of AI but aren't yet <em>sharing it outward</em>. The two lowest behaviours are both about cross-team knowledge transfer — this is your Catalyst design brief.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Seekers → Navigator</h3>
+      <p style="font-size:11px;color:var(--text-tertiary);margin:-6px 0 16px;">214 Seekers. % already answering Yes to Navigator questions.</p>
+      <div class="barrier-row"><span class="barrier-label">Explains AI impact to others</span><div class="barrier-track"><div class="barrier-fill" style="width:78.5%;background:#2ABEB9;"></div></div><span class="barrier-pct" style="color:#177874;">79%</span></div>
+      <div class="barrier-row"><span class="barrier-label">Checks outputs for accuracy & bias</span><div class="barrier-track"><div class="barrier-fill" style="width:73.4%;background:#2ABEB9;"></div></div><span class="barrier-pct" style="color:#177874;">73%</span></div>
+      <div class="barrier-row"><span class="barrier-label">Uses structured prompts daily</span><div class="barrier-track"><div class="barrier-fill" style="width:72.9%;background:#2ABEB9;"></div></div><span class="barrier-pct" style="color:#177874;">73%</span></div>
+      <div class="barrier-row"><span class="barrier-label">Experiments with new AI tasks</span><div class="barrier-track"><div class="barrier-fill" style="width:61.2%;background:#FFB511;"></div></div><span class="barrier-pct" style="color:#8a6000;">61%</span></div>
+      <div class="barrier-row"><span class="barrier-label">Participates in peer learning</span><div class="barrier-track"><div class="barrier-fill" style="width:31.3%;background:#F2007D;"></div></div><span class="barrier-pct" style="color:#b8005f;">31%</span></div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0 12px;">
+      <div class="callout sunrays" style="margin:0;">
+        <p class="callout-title">Key insight</p>
+        <p>69% of Seekers are not participating in peer learning. This is the single biggest lever for moving the majority of your organisation up a level — and it's a structural, not skills, problem.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 4: DEPARTMENTS -->
+<div class="page" id="page-departments">
+  <p class="section-label">Department-level view</p>
+
+  <div class="card" style="margin-bottom:16px;">
+    <h3>Participation & profile outcomes by department</h3>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Department</th>
+          <th>Responded</th>
+          <th>Total staff</th>
+          <th>Participation</th>
+          <th>Observer</th>
+          <th>Seeker</th>
+          <th>Navigator</th>
+          <th>Adventurer</th>
+          <th>Pathfinder</th>
+          <th>Adv+Path %</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="highlight"><td>Technology</td><td>202</td><td>359</td><td><span class="pill pill-amber">56%</span></td><td>35</td><td>85</td><td>46</td><td>25</td><td>11</td><td style="color:var(--aqua);font-weight:700;">17.8%</td></tr>
+        <tr class="highlight"><td>Data</td><td>57</td><td>85</td><td><span class="pill pill-green">67%</span></td><td>15</td><td>17</td><td>18</td><td>6</td><td>1</td><td style="color:#8a6000;font-weight:700;">12.3%</td></tr>
+        <tr><td>Revenue & Ops</td><td>335</td><td>975</td><td><span class="pill pill-red">34%</span></td><td>174</td><td>84</td><td>52</td><td>14</td><td>11</td><td>7.5%</td></tr>
+        <tr><td>Finance & Payments</td><td>44</td><td>104</td><td><span class="pill pill-amber">42%</span></td><td>26</td><td>12</td><td>6</td><td>0</td><td>0</td><td style="color:#b8005f;">0.0%</td></tr>
+        <tr><td>People & Talent</td><td>23</td><td>47</td><td><span class="pill pill-amber">49%</span></td><td>10</td><td>5</td><td>5</td><td>3</td><td>0</td><td>13.0%</td></tr>
+        <tr><td>Strategy Office</td><td>13</td><td>33</td><td><span class="pill pill-amber">39%</span></td><td>3</td><td>7</td><td>2</td><td>0</td><td>1</td><td>7.7%</td></tr>
+        <tr><td>India Operations</td><td>7</td><td>115</td><td><span class="pill pill-red">6%</span></td><td>6</td><td>1</td><td>0</td><td>0</td><td>0</td><td style="color:#b8005f;">0.0%</td></tr>
+        <tr><td>CEO Office</td><td>3</td><td>5</td><td><span class="pill pill-amber">60%</span></td><td>1</td><td>2</td><td>0</td><td>0</td><td>0</td><td>0.0%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid-2">
+    <div class="callout">
+      <p class="callout-title">Finance & Payments — zero Adv+Path</p>
+      <p>44 respondents, no one at Adventurer or Pathfinder. 6 Navigators are the closest candidates. This department has no internal AI champions visible in the data.</p>
+    </div>
+    <div class="callout sunset">
+      <p class="callout-title">India Operations — participation risk</p>
+      <p>Only 7 of 115 employees have responded (6%). This cohort is effectively invisible. Any OKR progress here requires participation before development.</p>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 5: PEOPLE LENS -->
+<div class="page" id="page-people">
+  <p class="section-label">Manager split & reassessment movement</p>
+
+  <div class="grid-2" style="margin-bottom:16px;">
+    <div class="card">
+      <h3>Manager vs non-manager profile</h3>
+      <p style="font-size:11px;color:var(--text-tertiary);margin:-6px 0 16px;">% at Adventurer or Pathfinder</p>
+      <div class="grid-2" style="margin-bottom:20px;">
+        <div style="text-align:center;padding:16px;background:var(--surface);border-radius:8px;">
+          <div style="font-size:28px;font-weight:700;color:var(--text-primary);">7.2%</div>
+          <div style="font-size:12px;color:var(--text-tertiary);margin-top:4px;">Managers</div>
+          <div style="font-size:11px;color:var(--text-tertiary);">166 respondents</div>
+        </div>
+        <div style="text-align:center;padding:16px;background:var(--surface);border-radius:8px;">
+          <div style="font-size:28px;font-weight:700;color:var(--aqua);">11.7%</div>
+          <div style="font-size:12px;color:var(--text-tertiary);margin-top:4px;">Non-managers</div>
+          <div style="font-size:11px;color:var(--text-tertiary);">522 respondents</div>
+        </div>
+      </div>
+      <div class="callout" style="margin:0;">
+        <p class="callout-title">Unexpected finding</p>
+        <p>Non-managers are outperforming managers at the advanced profiles. Managers may be aware of AI but not actively practising or enabling it — a risk for the Catalyst initiative which depends on management modelling.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Reassessment movement</h3>
+      <p style="font-size:11px;color:var(--text-tertiary);margin:-6px 0 16px;">22 people have taken the survey more than once</p>
+      <div class="grid-3" style="margin-bottom:20px;">
+        <div style="text-align:center;padding:16px;background:var(--aqua-light);border-radius:8px;">
+          <div style="font-size:28px;font-weight:700;color:#177874;">12</div>
+          <div style="font-size:12px;color:#177874;margin-top:4px;">Moved up</div>
+          <div style="font-size:11px;color:var(--text-tertiary);">55%</div>
+        </div>
+        <div style="text-align:center;padding:16px;background:var(--surface);border-radius:8px;">
+          <div style="font-size:28px;font-weight:700;color:var(--text-tertiary);">6</div>
+          <div style="font-size:12px;color:var(--text-tertiary);margin-top:4px;">Stayed same</div>
+          <div style="font-size:11px;color:var(--text-tertiary);">27%</div>
+        </div>
+        <div style="text-align:center;padding:16px;background:var(--pink-light);border-radius:8px;">
+          <div style="font-size:28px;font-weight:700;color:#b8005f;">4</div>
+          <div style="font-size:12px;color:#b8005f;margin-top:4px;">Moved down</div>
+          <div style="font-size:11px;color:var(--text-tertiary);">18%</div>
+        </div>
+      </div>
+      <div class="callout aqua" style="margin:0;">
+        <p class="callout-title">Reassessment works</p>
+        <p>55% of people who retook the survey progressed. This is a meaningful signal — the act of reassessment correlates with growth. Consider a structured reassessment nudge at 3–6 month intervals.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">Horizon AI Literacy Dashboard · Generated April 2026 · Data: 688 latest responses</div>
+
+<script>
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// Donut chart
+const donutCtx = document.getElementById('donutChart').getContext('2d');
+new Chart(donutCtx, {
+  type: 'doughnut',
+  data: {
+    labels: ['Observer','Seeker','Navigator','Adventurer','Pathfinder'],
+    datasets: [{
+      data: [271, 214, 130, 48, 25],
+      backgroundColor: ['#D3D1C7','#2ABEB9','#FFB511','#F2007D','#441F72'],
+      borderWidth: 2,
+      borderColor: '#ffffff',
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, cutout: '65%',
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => {
+            const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+            return ` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)`;
+          }
+        }
+      }
+    }
+  }
+});
+
+// Stacked bars
+const units = [
+  {name:'Technology',      obs:35, seek:85, nav:46, adv:25, path:11, total:202},
+  {name:'Data',            obs:15, seek:17, nav:18, adv:6,  path:1,  total:57},
+  {name:'Rev & Ops',       obs:174,seek:84, nav:52, adv:14, path:11, total:335},
+  {name:'Finance',         obs:26, seek:12, nav:6,  adv:0,  path:0,  total:44},
+  {name:'People & Talent', obs:10, seek:5,  nav:5,  adv:3,  path:0,  total:23},
+  {name:'Strategy',        obs:3,  seek:7,  nav:2,  adv:0,  path:1,  total:13},
+  {name:'India Ops',       obs:6,  seek:1,  nav:0,  adv:0,  path:0,  total:7},
+];
+const stackedEl = document.getElementById('stacked-bars');
+units.forEach(u => {
+  const pcts = [u.obs,u.seek,u.nav,u.adv,u.path].map(v=>Math.round(v/u.total*100));
+  const colors = ['#D3D1C7','#2ABEB9','#FFB511','#F2007D','#441F72'];
+  let segs = pcts.map((p,i)=>`<div class="stacked-seg" style="width:${p}%;background:${colors[i]};"></div>`).join('');
+  stackedEl.innerHTML += `
+    <div class="stacked-row">
+      <span class="stacked-label">${u.name}</span>
+      <div class="stacked-bar">${segs}</div>
+      <span class="stacked-total">${u.total}</span>
+    </div>`;
+});
+</script>
+</body>
+</html>
